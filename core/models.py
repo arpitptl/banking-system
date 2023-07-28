@@ -107,7 +107,7 @@ class WithdrawalStrategy(models.Model):
         raise NotImplementedError("Subclasses must implement this method.")
 
 
-class ZeroBalanceWithdrawal(WithdrawalStrategy):
+class ZeroBalanceWithdrawal(WithdrawalStrategy, WithdrawalConstant):
     """
     Withdrawal strategy for accounts with zero balance.
     Allows only a limited number of withdrawals per month.
@@ -117,12 +117,12 @@ class ZeroBalanceWithdrawal(WithdrawalStrategy):
             transaction_type='withdrawal',
             timestamp__month=datetime.now().month,
         ).count()
-        if withdrawal_count >= WithdrawalConstant.MONTHLY_WITHDRAWAL_LIMIT:
-            return False, WithdrawalConstant.FAILURE_REASONS["MONTHLY_WITHDRAWAL_LIMIT_BREACHED"]
+        if withdrawal_count >= self.MONTHLY_WITHDRAWAL_LIMIT:
+            return False, self.FAILURE_REASONS["MONTHLY_WITHDRAWAL_LIMIT_BREACHED"]
         return True, ''
 
 
-class StudentWithdrawal(WithdrawalStrategy):
+class StudentWithdrawal(WithdrawalStrategy, StudentAccountWithdrawalConstant):
     """
     Withdrawal strategy for student accounts.
     Allows only a limited number of withdrawals per month and enforces a minimum account balance.
@@ -133,15 +133,15 @@ class StudentWithdrawal(WithdrawalStrategy):
             timestamp__month=datetime.now().month,
         ).count()
 
-        if withdrawal_count >= StudentAccountWithdrawalConstant.MONTHLY_WITHDRAWAL_LIMIT:
-            return False, WithdrawalConstant.FAILURE_REASONS["MONTHLY_WITHDRAWAL_LIMIT_BREACHED"]
-        elif account.balance - amount < StudentAccountWithdrawalConstant.MIN_ACCOUNT_BALANCE:
-            return False, WithdrawalConstant.FAILURE_REASONS["MIN_ACCOUNT_BALANCE_BREACHED"]
+        if withdrawal_count >= self.MONTHLY_WITHDRAWAL_LIMIT:
+            return False, self.FAILURE_REASONS["MONTHLY_WITHDRAWAL_LIMIT_BREACHED"]
+        elif account.balance - amount < self.MIN_ACCOUNT_BALANCE:
+            return False, self.FAILURE_REASONS["MIN_ACCOUNT_BALANCE_BREACHED"]
 
         return True, ''
 
 
-class RegularSavingWithdrawal(WithdrawalStrategy):
+class RegularSavingWithdrawal(WithdrawalStrategy, SavingAccountWithdrawalConstant):
     """
     Withdrawal strategy for regular saving accounts.
     Allows a limited number of free withdrawals per month and enforces a minimum average balance over the last 90 days.
@@ -153,8 +153,8 @@ class RegularSavingWithdrawal(WithdrawalStrategy):
             timestamp__gte=last_90_days,
         ).aggregate(avg_balance=Avg('available_balance_after_transaction'))['avg_balance']
 
-        if average_balance and average_balance < SavingAccountWithdrawalConstant.AVERAGE_BALANCE:
-            return False, WithdrawalConstant.FAILURE_REASONS["MIN_ACCOUNT_BALANCE_BREACHED"]
+        if average_balance and average_balance < self.AVERAGE_BALANCE:
+            return False, self.FAILURE_REASONS["MIN_ACCOUNT_BALANCE_BREACHED"]
 
         return True, ''
 
@@ -163,8 +163,8 @@ class RegularSavingWithdrawal(WithdrawalStrategy):
             transaction_type='withdrawal',
             timestamp__month=datetime.now().month,
         ).count()
-        if withdrawal_count >= SavingAccountWithdrawalConstant.MONTHLY_WITHDRAWAL_LIMIT:
-            return SavingAccountWithdrawalConstant.EXTRA_WITHDRAWAL_CHARGE
+        if withdrawal_count >= self.MONTHLY_WITHDRAWAL_LIMIT:
+            return self.EXTRA_WITHDRAWAL_CHARGE
         return 0
 
 
@@ -191,16 +191,16 @@ class DepositStrategy(models.Model):
         raise NotImplementedError("Subclasses must implement this method.")
 
 
-class DefaultDeposit(DepositStrategy):
+class DefaultDeposit(DepositStrategy, DepositConstant):
     def is_allowed(self, account, amount):
-        if amount <= DepositConstant.DEPOSIT_LIMIT_WITHOUT_KYC:
+        if amount <= self.DEPOSIT_LIMIT_WITHOUT_KYC:
             return True, ''
         elif account.kyc_verified:
             return True, ''
-        return False, DepositConstant.FAILURE_REASONS["KYC_LIMIT_BREACHED"]
+        return False, self.FAILURE_REASONS["KYC_LIMIT_BREACHED"]
 
 
-class StudentDeposit(DepositStrategy):
+class StudentDeposit(DepositStrategy, StudentAccountDepositConstant):
     """
     Deposit strategy for student accounts.
     Limits the total deposit amount in a month.
@@ -215,8 +215,8 @@ class StudentDeposit(DepositStrategy):
             timestamp__lte=today
         ).aggregate(total_deposit=models.Sum('amount'))['total_deposit'] or 0
 
-        if total_deposit_this_month + amount > StudentAccountDepositConstant.MONTHLY_DEPOSIT_LIMIT:
-            return False, DepositConstant.FAILURE_REASONS["MONTHLY_DEPOSIT_LIMIT_BREACHED"]
+        if total_deposit_this_month + amount > self.MONTHLY_DEPOSIT_LIMIT:
+            return False, self.FAILURE_REASONS["MONTHLY_DEPOSIT_LIMIT_BREACHED"]
 
         return True, ''
 
